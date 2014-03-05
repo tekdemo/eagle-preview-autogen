@@ -9,3 +9,7 @@ Currently, a Unix or Linux based OS, with Git, GerbV, and Eagle all placed in th
 
 For best usage, it's highly encouraged to also share your board on GitHub, since they have visual diffs between commits. 
 
+Installation
+------------
+
+Copy the pre-commit and post-commit files into your .git/hooks folder. You'll also want to run `mkdir gerber-previews` and `git add gerber-previews`, since the script won't do this automatically 
