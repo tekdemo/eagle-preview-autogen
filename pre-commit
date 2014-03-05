@@ -77,7 +77,7 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	echo "Generating outline and drill images"
 	OUTLINE="-f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger"
 	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.boardoutline.png 		$OUTLINE -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.drills.png 		$OUTLINE -f "$DRILLCOLOR" $GERBER_FOLDER/$NAME.drills.xln
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.drills.png 		$OUTLINE -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
 	
 	echo Generating top images
 	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.toplayer.png	 	$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
