@@ -1,0 +1,104 @@
+#Assuming stuff is in the path.
+#Probably shouldn't do this.
+#!/bin/bash
+EAGLE=eagle
+GERBV=gerbv
+
+#Specify the sub-folders to put images in
+IMAGE_FOLDER=gerber-previews
+GERBER_FOLDER=gerber-files
+
+#Set colors, must fit gerber "#RRGGBB" or "#RRGGBBAA" format
+OUTLINECOLOR="#FFFFFF"
+DRILLCOLOR="#000000"
+SILKSCREENCOLOR="#FFFFFF88"
+MASKCOLOR="#e5c100A0"
+COPPERCOLOR="#7f6b00"
+
+
+
+
+
+#Verify that the folders are there, or try to make them if they're just missing
+if [ ! -e $IMAGE_FOLDER ];then mkdir $IMAGE_FOLDER || {echo "Could not find images folder" ; exit} ; fi
+if [ ! -e $GERBER_FOLDER ];then mkdir $GERBER_FOLDER || {echo "Could not find gerber folder" ; exit} ; fi
+
+
+#TODO get the name of new or modified .BRD files
+
+#TODO For each one, generate previews
+
+	#FIXME Cheat for now
+	BOARD=sirvo.v2.6.brd
+	NAME=$(basename $BOARD .brd)
+
+	echo Operating on $BOARD using name $NAME
+
+
+	#Shove into a CAM processor in Eagle, from page 305 of the manual
+	#Searching for "terminal" gives better results than "command line"
+	#-X cam processor
+	#-N Suppress erros
+	#-d device
+	#-o output
+	
+	echo "Generating board outline"
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.boardoutline.ger" $BOARD Dimension Milling  2>/dev/null
+	
+	echo "Generating Drill file"
+	$EAGLE -X -N -d EXCELLON -o "$GERBER_FOLDER/$NAME.drills.xln" $BOARD Drills Holes 2>/dev/null
+
+	echo "Generating top layers"
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.toplayer.ger" $BOARD Top Pads Vias 2>/dev/null
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.topstopmask.ger" $BOARD tStop 2>/dev/null
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.topsilkscreen.ger" $BOARD tPlace tNames 2>/dev/null
+	
+	echo "Generating bottom layers"
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomlayer.ger" $BOARD Bottom Pads Vias 2>/dev/null
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomstopmask.ger" $BOARD bStop 2>/dev/null
+	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomsilkscreen.ger" $BOARD bPlace bName 2>/dev/null
+
+	
+	#Assuming no errors, because hell yeeah bitches. 
+	
+	#Generate images using GerbV, using a soemwhat reasonable height/width
+	
+	#Set the gerber option for image size and/or resolution
+	IMAGE_SIZE="--window=600x600 --antialias"
+	#IMAGE_SIZE="--dpi=400 --antialias"
+	
+	
+	echo "Generating outline and drill images"
+	OUTLINE="-f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger"
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.boardoutline.png 		$OUTLINE -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.drills.png 		$OUTLINE -f "$DRILLCOLOR" $GERBER_FOLDER/$NAME.drills.xln
+	
+	echo Generating top images
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.toplayer.png	 	$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.topstopmask.png	 	$OUTLINE -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.topsilkscreen.png  	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
+
+	echo Generating bottom images
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomlayer.png 		$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomstopmask.png 	$OUTLINE -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomsilkscreen.png 	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
+	
+	echo Generating combined top images
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.board-top.png \
+		$OUTLINE \
+		-f "$DRILLCOLOR" 	$GERBER_FOLDER/$NAME.drills.xln	\
+		-f "$SILKSCREENCOLOR" 	$GERBER_FOLDER/$NAME.topsilkscreen.ger \
+		-f "$MASKCOLOR" 	$GERBER_FOLDER/$NAME.topstopmask.ger \
+		-f "$COPPERCOLOR" 	$GERBER_FOLDER/$NAME.toplayer.ger 
+		
+	echo Generating combined bottom images
+	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.board-bottom.png \
+		$OUTLINE \
+		-f "$DRILLCOLOR" 	$GERBER_FOLDER/$NAME.drills.xln	\
+		-f "$SILKSCREENCOLOR" 	$GERBER_FOLDER/$NAME.bottomsilkscreen.ger \
+		-f "$MASKCOLOR" 	$GERBER_FOLDER/$NAME.bottomstopmask.ger \
+		-f "$COPPERCOLOR" 	$GERBER_FOLDER/$NAME.bottomlayer.ger 
+
+	
+	
+	
