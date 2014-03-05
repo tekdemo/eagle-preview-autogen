@@ -1,6 +1,11 @@
+#!/bin/bash
+
+echo Generating previews of BRD Files
+echo running from base directory: $PWD
+
+
 #Assuming stuff is in the path.
 #Probably shouldn't do this.
-#!/bin/bash
 EAGLE=eagle
 GERBV=gerbv
 
@@ -24,12 +29,13 @@ if [ ! -e $IMAGE_FOLDER ];then mkdir $IMAGE_FOLDER || {echo "Could not find imag
 if [ ! -e $GERBER_FOLDER ];then mkdir $GERBER_FOLDER || {echo "Could not find gerber folder" ; exit} ; fi
 
 
-#TODO get the name of new or modified .BRD files
-
-#TODO For each one, generate previews
+#Check with Git for a list of added or modified boards, then strip off git data from the filename 
+for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
+	echo Processing $BOARD
+	#TODO For each one, generate previews
 
 	#FIXME Cheat for now
-	BOARD=sirvo.v2.6.brd
+	BOARD=$(basename $BOARD) 
 	NAME=$(basename $BOARD .brd)
 
 	echo Operating on $BOARD using name $NAME
@@ -99,6 +105,10 @@ if [ ! -e $GERBER_FOLDER ];then mkdir $GERBER_FOLDER || {echo "Could not find ge
 		-f "$MASKCOLOR" 	$GERBER_FOLDER/$NAME.bottomstopmask.ger \
 		-f "$COPPERCOLOR" 	$GERBER_FOLDER/$NAME.bottomlayer.ger 
 
-	
-	
+done	
+
+#Add the new images to the Git commit, hope it doesn't break things. 
+git add $IMAGE_FOLDER
+
+
 	
