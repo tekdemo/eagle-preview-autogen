@@ -30,11 +30,10 @@ if [ ! -e $GERBER_FOLDER ];then mkdir $GERBER_FOLDER || {echo "Could not find ge
 
 
 #Check with Git for a list of added or modified boards, then strip off git data from the filename 
+#FIXME Does not handle filenames with spaces very well.
 for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	echo Processing $BOARD
-	#TODO For each one, generate previews
 
-	#FIXME Cheat for now
 	BOARD=$(basename $BOARD) 
 	NAME=$(basename $BOARD .brd)
 
