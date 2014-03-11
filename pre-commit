@@ -36,8 +36,16 @@ COPPERCOLOR="#7f6b00"
 #For really large boards, you might want to tone it down to 300-400
 DPI=500
 
+#You can set the maximum image size here, and the resulting previews will scale down appropriately
+#To disable, just set to arbitrarily large values
+#MAXIMAGEWIDTH=100000
+#MAXIMAGEHEIGHT=100000
+MAXIMAGEWIDTH=1500
+MAXIMAGEHEIGHT=1500
+
 #Optionally include outlines on the individual layer renderings. Should be true or false.
 INCLUDE_OUTLINES=false
+
 
 ###############################
 ##END OF USER ADJUSTABLE VALUES
@@ -128,18 +136,33 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	#Generate our DPI and window values
 	BOARDWIDTH=$(echo $fMAXX-$fMINX |bc -l )
 	BOARDHEIGHT=$(echo $fMAXY-$fMINY |bc -l)
-
 	echo "Board size (in) = $BOARDWIDTH x $BOARDHEIGHT"
 
-	# In order to crop the image (which we want to do), we need to provide GerbV with both a DPI and the window size in pixels
-	#DPI=400 #In user adjustable settings up top
-	WINDOWWIDTH=$(echo "$BOARDWIDTH*$DPI" |bc -l )
-	WINDOWHEIGHT=$(echo "$BOARDHEIGHT*$DPI" |bc -l )
+	#DPI=500 #In user adjustable settings up top
+	
+	#If we want to cap the image sizes, we'll need to lower the DPI a bit. Let's try for that
+	#Since this is in pixels, we're dropping the floating point
+	IMAGEWIDTH=$(echo "$BOARDWIDTH*$DPI" |bc |sed 's/\..*//')
+	if [ $IMAGEWIDTH -gt $MAXIMAGEWIDTH ] ;then
+		echo -n "lowering DPI from $DPI to "
+		DPI=$(echo $DPI*$MAXIMAGEWIDTH/$IMAGEWIDTH |bc )
+		echo "$DPI"
+
+	fi
+	
+	#Since this calculates with the "new" DPI if we have it, we can assert that the image will be below both maximums
+	IMAGEHEIGHT=$(echo "$BOARDHEIGHT*$DPI" |bc |sed 's/\..*//' )
+	if [ $IMAGEHEIGHT -gt $MAXIMAGEHEIGHT ] ;then
+		echo -n "lowering DPI from $DPI to "
+		DPI=$(echo $DPI*$MAXIMAGEHEIGHT/$IMAGEHEIGHT |bc)
+		echo "$DPI"
+	fi
 	
 	#Now, provide GerbV with all the data it needs to provide the exact image frame that we want
-	IMAGE_SIZE="--origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT} --antialias"
+	# In order to crop the image (which we want to do), we need to provide GerbV with both a DPI and the window size
+	IMAGE_SIZE="--origin=${fMINX}x${fMINY} --dpi=$DPI --window_inch=${BOARDWIDTH}x${BOARDHEIGHT} --antialias"
 
-	}	
+	}
 	
 	
 	{ echo "Generating outline and drill images"
@@ -164,7 +187,7 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png      $INCLUDE_OUTLINES -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	$INCLUDE_OUTLINES -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png $INCLUDE_OUTLINES -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
-	
+		
 	echo Generating combined top images
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.board-top.png \
 		$OUTLINE \
