@@ -5,7 +5,7 @@ Git hooks to aid Eagle users in encouraging visual diffs. These scripts will run
 
 If ImageMagick is installed, it also generates a visual diff of board changes, and includes those into your commit as well. This technique is based off Evil Mad Science Lab's [Visual Diff guide](http://www.evilmadscientist.com/2011/improving-open-source-hardware-visual-diffs/).
 
-You can see sample images that this will generate at this [this commit](https://github.com/tekdemo/eagle-preview-autogen/commit/d607463c2a51fec488ca56b69db318d3f668e53e)
+You can see sample images that this will generate at this [this commit](https://github.com/tekdemo/eagle-preview-autogen/commit/796769e88a65bbafc2b7e4621f3b6570875a87ad)
 
 
 Requirements
