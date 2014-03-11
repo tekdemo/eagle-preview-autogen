@@ -9,6 +9,17 @@ echo running from base directory: $PWD
 EAGLE=eagle
 GERBV=gerbv
 
+#Determine whether we should generate our own visual diffs
+#Otherwise, it will be up to other tools to compare images between revisions
+GEN_VISUAL_DIFFS=true
+
+#Ensure we have the tool for our visual diff
+IMAGEMAGICK_COMPOSITE=composite
+if ! $IMAGEMAGICK_COMPOSITE -version;then 
+	echo "ImageMagick not found, disabling visual diffs"
+	GEN_VISUAL_DIFFS=false;
+fi
+
 #Specify the sub-folders to put images in
 IMAGE_FOLDER=gerber-previews
 GERBER_FOLDER=gerber-files
@@ -19,8 +30,6 @@ DRILLCOLOR="#000000"
 SILKSCREENCOLOR="#FFFFFF88"
 MASKCOLOR="#e5c100A0"
 COPPERCOLOR="#7f6b00"
-
-
 
 
 
@@ -36,16 +45,19 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 
 	BOARD=$(basename $BOARD) 
 	NAME=$(basename $BOARD .brd)
-
+	
+	#For generating visual diffs, we need both new and old versions to exist, so generate a folder to put them in
+	OUTPUTDIR=$(mktemp -d)
+	
 	echo Operating on $BOARD using name $NAME
 
-
-	#Shove into a CAM processor in Eagle, from page 305 of the manual
+	{ #Shove into a CAM processor in Eagle
+	#page 305 of the manual has other commands that may be useful
 	#Searching for "terminal" gives better results than "command line"
 	#-X cam processor
 	#-N Suppress erros
 	#-d device
-	#-o output
+	#-o output filename
 	
 	echo "Generating board outline"
 	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.boardoutline.ger" $BOARD Dimension Milling  2>/dev/null
@@ -62,34 +74,33 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomlayer.ger" $BOARD Bottom Pads Vias 2>/dev/null
 	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomstopmask.ger" $BOARD bStop 2>/dev/null
 	$EAGLE -X -N -d GERBER_RS274X -o "$GERBER_FOLDER/$NAME.bottomsilkscreen.ger" $BOARD bPlace bName 2>/dev/null
-
+	}
 	
 	#Assuming no errors, because hell yeeah bitches. 
+	#Probably should detect those and return 1, which will stop the commit until things get fixed.
 	
 	#Generate images using GerbV, using a soemwhat reasonable height/width
-	
 	#Set the gerber option for image size and/or resolution
 	IMAGE_SIZE="--window=600x600 --antialias"
 	#IMAGE_SIZE="--dpi=400 --antialias"
 	
-	
-	echo "Generating outline and drill images"
+	{ echo "Generating outline and drill images"
 	OUTLINE="-f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger"
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.boardoutline.png 		$OUTLINE -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.drills.png 		$OUTLINE -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.boardoutline.png 		$OUTLINE -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.drills.png 		$OUTLINE -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
 	
 	echo Generating top images
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.toplayer.png	 	$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.topstopmask.png	 	$OUTLINE -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.topsilkscreen.png  	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.toplayer.png	 	$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topstopmask.png	 	$OUTLINE -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topsilkscreen.png  	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
 
 	echo Generating bottom images
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomlayer.png 		$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomstopmask.png 	$OUTLINE -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.bottomsilkscreen.png 	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png 		$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	$OUTLINE -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png 	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
 	
 	echo Generating combined top images
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.board-top.png \
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.board-top.png \
 		$OUTLINE \
 		-f "$DRILLCOLOR" 	$GERBER_FOLDER/$NAME.drills.xln	\
 		-f "$SILKSCREENCOLOR" 	$GERBER_FOLDER/$NAME.topsilkscreen.ger \
@@ -97,17 +108,43 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 		-f "$COPPERCOLOR" 	$GERBER_FOLDER/$NAME.toplayer.ger 
 		
 	echo Generating combined bottom images
-	$GERBV $IMAGE_SIZE --export=png  --output=$IMAGE_FOLDER/$NAME.board-bottom.png \
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.board-bottom.png \
 		$OUTLINE \
 		-f "$DRILLCOLOR" 	$GERBER_FOLDER/$NAME.drills.xln	\
 		-f "$SILKSCREENCOLOR" 	$GERBER_FOLDER/$NAME.bottomsilkscreen.ger \
 		-f "$MASKCOLOR" 	$GERBER_FOLDER/$NAME.bottomstopmask.ger \
 		-f "$COPPERCOLOR" 	$GERBER_FOLDER/$NAME.bottomlayer.ger 
-
+	}
+	
+	{ #Generate visual diffs to the current image folders
+	#Check to see if we have existing images
+	#If not, we don't want to try doing any visual diffs
+	if [ "$GEN_VISUAL_DIFFS"=="true" ]; then
+		for image in $(ls $OUTPUTDIR);do
+			if [ -e "$IMAGE_FOLDER/$image" ] && [ -e  "$OUTPUTDIR/$image" ] ;then 
+				echo "Generating diff for $image"
+				#use ImageMagick to generate a visual diff. Old objects will be red, new placements will be blue. 
+				#Thanks to EMSL for finding this!
+				$IMAGEMAGICK_COMPOSITE -stereo 0  $OUTPUTDIR/$image $IMAGE_FOLDER/$image $OUTPUTDIR/$image.diff
+			fi
+		done
+	fi
+	
+	#Save a lot of time and effort on making proper names with ugly hacks like this
+	rename 's/\.png\.diff$/.diff.png/' $OUTPUTDIR/*
+	}
+	
+	{ #move the generated images to the output folder
+		#This will over write our current set of images, which is fine since they're saved in Git
+		#TODO might possibly need an -f to overwrite in batch mode.
+		mv $OUTPUTDIR/*.png $IMAGE_FOLDER/
+		rmdir  $OUTPUTDIR
+	}
 done	
 
-#Add the new images to the Git commit, hope it doesn't break things. 
-git add $IMAGE_FOLDER
-
+#Add the new images, which the post-commit will amend to this one. During pre-commit, you're not allowed to add additional files
+#git add $IMAGE_FOLDER 
+#Pass post commit some data. It will add these files in during the post-commit
+echo $IMAGE_FOLDER >.git_amend_data
 
 	
