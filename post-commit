@@ -1,5 +1,5 @@
 #!/bin/bash
-if [ -a .git_amend_data ] 
+if [ -e .git_amend_data ] 
 	echo Adding auto-generated images to commit
 
 	#pick up the image folder from the last script
@@ -8,7 +8,7 @@ if [ -a .git_amend_data ]
 	rm .git_amend_data
 
 	#Add generated images to last commit, and avoid re-running the generation script that we just included
-	git add IMAGE_FOLDER/*
+	git add $IMAGE_FOLDER/*
 	git commit --amend -C HEAD --noverify
 	
 	echo Images added
