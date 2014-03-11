@@ -25,9 +25,9 @@ fi
 IMAGE_FOLDER=gerber-previews
 GERBER_FOLDER=gerber-files
 
-#Set colors, must fit gerber "#RRGGBB" or "#RRGGBBAA" format
+#Set colors, must fit gerber "#RRGGBB" or "#RRGGBBAA" format, where AA is the alpha transparency
 OUTLINECOLOR="#FFFFFF"
-DRILLCOLOR="#000000"
+DRILLCOLOR="#000000" #This will not be honored on the individual drill layer, as I'm rendering that as white. Otherwise, it's likely black on black, which is less than useful
 SILKSCREENCOLOR="#FFFFFF88"
 MASKCOLOR="#e5c100A0"
 COPPERCOLOR="#7f6b00"
@@ -35,6 +35,9 @@ COPPERCOLOR="#7f6b00"
 #Indicate the desired DPI. 500 produces very detailed images at roughly 4x maginfication
 #For really large boards, you might want to tone it down to 300-400
 DPI=500
+
+#Optionally include outlines on the individual layer renderings. Should be true or false.
+INCLUDE_OUTLINES=true
 
 ###############################
 ##END OF USER ADJUSTABLE VALUES
@@ -141,18 +144,26 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	
 	{ echo "Generating outline and drill images"
 	OUTLINE="-f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger"
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.boardoutline.png 	 -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.drills.png 		 -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
+	
+	#Process requests to include outlines on the individual layers
+	if [ "$INCLUDE_OUTLINES" = "true" ] ;then
+		INCLUDE_OUTLINES="$OUTLINE"
+	else
+		INCLUDE_OUTLINES=""
+	fi
+	
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.boardoutline.png 			  -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.drills.png 		$INCLUDE_OUTLINES -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
 	
 	echo Generating top images
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.toplayer.png	 	 -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topstopmask.png	 -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topsilkscreen.png  	 -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.toplayer.png	 	$INCLUDE_OUTLINES -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topstopmask.png	$INCLUDE_OUTLINES -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topsilkscreen.png  	$INCLUDE_OUTLINES -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
 
 	echo Generating bottom images
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png       -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	 -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png  -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png      $INCLUDE_OUTLINES -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	$INCLUDE_OUTLINES -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png $INCLUDE_OUTLINES -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
 	
 	echo Generating combined top images
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.board-top.png \
