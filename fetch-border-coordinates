@@ -1,0 +1,62 @@
+#!/bin/bash
+
+#export the outline through GerbV, which makes it very pretty and easy to work on
+gerbv -x rs274x -o processed.boardoutline.ger $1
+
+{ # Generate board extents
+#These all work on the same principal, because I'm lazy. I'm 100% sure if I did a state buffer, it'd be an order of magnitude more effient. 
+# Take the processed gerber output,
+#Search for the draw command
+#grab the appropriate coordinate type
+#Clean up the non-numerical stuff
+#sort the data
+#Take the top or bottom line
+#remove leading zeroes, which will make bash maths angry
+
+#Get min X
+MINX=$(cat processed-outline.ger |grep -e '^G'  |grep -Po "X[0-9]+" |sed 's/X//g' |sort -n |head -n1 )
+
+#Get max X
+MAXX=$(cat processed-outline.ger |grep -e '^G'  |grep -Po "X[0-9]+" |sed 's/X//g' |sort -n |tail -n1)
+
+#get min Y
+MINY=$(cat processed-outline.ger |grep -e '^G'  |grep -Po "Y[0-9]+" |sed 's/Y//g' |sort -n |head -n1 )
+
+#get max Y
+MAXY=$(cat processed-outline.ger |grep -e '^G'  |grep -Po "Y[0-9]+" |sed 's/Y//g' |sort -n |tail -n1)
+
+#MINX=$(echo $MINX |sed 's/^0*//') # Removes leading zeroes
+
+echo "Bounds (mil)= ($MINX,$MINY) to ($MAXX,$MAXY)"
+}
+
+{ #Do some maths
+#GerbV makes everything 3:4 precision, so we need to break that up into floating point
+fMINX=$(echo $MINX|sed -e 's/\(...\)\(....\)/\1.\2/')
+fMAXX=$(echo $MAXX|sed -e 's/\(...\)\(....\)/\1.\2/')
+fMINY=$(echo $MINY|sed -e 's/\(...\)\(....\)/\1.\2/')
+fMAXY=$(echo $MAXY|sed -e 's/\(...\)\(....\)/\1.\2/')
+echo "Bounds (in)= ($fMINX,$fMINY) to ($fMAXX,$fMAXY)"
+
+#Generate our DPI and window values
+BOARDWIDTH=$(echo $fMAXX-$fMINX |bc -l )
+BOARDHEIGHT=$(echo $fMAXY-$fMINY |bc -l)
+
+echo "Board dimensions = $BOARDWIDTH x $BOARDHEIGHT"
+
+# In order to crop the image (which we want to do), we need to provide GerbV with both a DPI and the window size in pixels
+DPI=500
+WINDOWWIDTH=$(echo "$BOARDWIDTH*$DPI" |bc -l )
+WINDOWHEIGHT=$(echo "$BOARDHEIGHT*$DPI" |bc -l )
+}
+
+{ #Now, force GerbV to generate the pictures, which will be cropped at the board outline, and everything will be the same scale. Yay!
+gerbv --origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT} --export=png --output outline.png current.boardoutline.ger
+
+for gerber in $(ls *.ger*); do
+	fname=$(basename $gerber .ger)
+	echo Generating $fname.png from $fname.ger
+	gerbv --origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT} --export=png --output $fname.png $fname.ger
+done
+}
+
