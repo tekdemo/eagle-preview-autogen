@@ -1,8 +1,9 @@
 #!/bin/bash
 
-echo Generating previews of BRD Files
-echo running from base directory: $PWD
 
+##################################
+## START OF USER ADJUSTABLE VALUES
+##################################
 
 #Assuming stuff is in the path.
 #Probably shouldn't do this.
@@ -31,7 +32,13 @@ SILKSCREENCOLOR="#FFFFFF88"
 MASKCOLOR="#e5c100A0"
 COPPERCOLOR="#7f6b00"
 
+#Indicate the desired DPI. 500 produces very detailed images at roughly 4x maginfication
+#For really large boards, you might want to tone it down to 300-400
+DPI=500
 
+###############################
+##END OF USER ADJUSTABLE VALUES
+###############################
 
 #Verify that the folders are there, or try to make them if they're just missing
 if [ ! -e $IMAGE_FOLDER ];then mkdir $IMAGE_FOLDER || {echo "Could not find images folder" ; exit} ; fi
@@ -79,25 +86,73 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	#Assuming no errors, because hell yeeah bitches. 
 	#Probably should detect those and return 1, which will stop the commit until things get fixed.
 	
-	#Generate images using GerbV, using a soemwhat reasonable height/width
-	#Set the gerber option for image size and/or resolution
-	IMAGE_SIZE="--window=600x600 --antialias"
-	#IMAGE_SIZE="--dpi=400 --antialias"
+	{ # Generate board extents
+	#These all work on the same horribly inefficient principal, because I'm lazy. I'm 100% sure if I did a line-by-line comparison, it'd be orders of magnitude more effient. 
+	# Take the processed gerber output,
+	#Search for the draw command
+	#grab the appropriate coordinate type
+	#Clean up the non-numerical stuff
+	#sort the data
+	#Take the top or bottom line
+	#remove leading zeroes, which will make bash maths angry
+	
+	#We need to process the board outline, so it's in a known and reliable state
+	TEMPOUTLINE=$(tempfile -s .boardoutline.ger)
+	gerbv -x rs274x -o $TEMPOUTLINE "$GERBER_FOLDER/$NAME.boardoutline.ger"
+	
+	#Get min X
+	MINX=$(cat $TEMPOUTLINE |grep -e '^G'  |grep -Po "X[0-9]+" |sed 's/X//g' |sort -n |head -n1 )
+	#Get max X
+	MAXX=$(cat $TEMPOUTLINE |grep -e '^G'  |grep -Po "X[0-9]+" |sed 's/X//g' |sort -n |tail -n1)
+	#get min Y
+	MINY=$(cat $TEMPOUTLINE |grep -e '^G'  |grep -Po "Y[0-9]+" |sed 's/Y//g' |sort -n |head -n1 )
+	#get max Y
+	MAXY=$(cat $TEMPOUTLINE |grep -e '^G'  |grep -Po "Y[0-9]+" |sed 's/Y//g' |sort -n |tail -n1)
+	echo "Bounds (mil)= ($MINX,$MINY) to ($MAXX,$MAXY)"
+	
+	#clean up, we don't need it past here
+	rm $TEMPOUTLINE
+	}
+	
+	{ #Do some maths
+	#GerbV makes everything 3:4 precision, so we need to break that up into floating point
+	fMINX=$(echo $MINX|sed -e 's/\(...\)\(....\)/\1.\2/')
+	fMAXX=$(echo $MAXX|sed -e 's/\(...\)\(....\)/\1.\2/')
+	fMINY=$(echo $MINY|sed -e 's/\(...\)\(....\)/\1.\2/')
+	fMAXY=$(echo $MAXY|sed -e 's/\(...\)\(....\)/\1.\2/')
+	echo "Bounds (in)= ($fMINX,$fMINY) to ($fMAXX,$fMAXY)"
+
+	#Generate our DPI and window values
+	BOARDWIDTH=$(echo $fMAXX-$fMINX |bc -l )
+	BOARDHEIGHT=$(echo $fMAXY-$fMINY |bc -l)
+
+	echo "Board size (in) = $BOARDWIDTH x $BOARDHEIGHT"
+
+	# In order to crop the image (which we want to do), we need to provide GerbV with both a DPI and the window size in pixels
+	#DPI=400 #In user adjustable settings up top
+	WINDOWWIDTH=$(echo "$BOARDWIDTH*$DPI" |bc -l )
+	WINDOWHEIGHT=$(echo "$BOARDHEIGHT*$DPI" |bc -l )
+	
+	#Now, provide GerbV with all the data it needs to provide the exact image frame that we want
+	IMAGE_SIZE="--origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT}"
+
+	}	
+	
 	
 	{ echo "Generating outline and drill images"
 	OUTLINE="-f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger"
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.boardoutline.png 		$OUTLINE -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.drills.png 		$OUTLINE -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.boardoutline.png 	 -f "$OUTLINECOLOR" $GERBER_FOLDER/$NAME.boardoutline.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.drills.png 		 -f "#FFFFFF" $GERBER_FOLDER/$NAME.drills.xln
 	
 	echo Generating top images
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.toplayer.png	 	$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topstopmask.png	 	$OUTLINE -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topsilkscreen.png  	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.toplayer.png	 	 -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.toplayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topstopmask.png	 -f "$MASKCOLOR"   $GERBER_FOLDER/$NAME.topstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.topsilkscreen.png  	 -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.topsilkscreen.ger
 
 	echo Generating bottom images
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png 		$OUTLINE -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	$OUTLINE -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
-	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png 	$OUTLINE -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomlayer.png       -f "$COPPERCOLOR" $GERBER_FOLDER/$NAME.bottomlayer.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomstopmask.png 	 -f "$MASKCOLOR"  $GERBER_FOLDER/$NAME.bottomstopmask.ger
+	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.bottomsilkscreen.png  -f "$SILKSCREENCOLOR" $GERBER_FOLDER/$NAME.bottomsilkscreen.ger
 	
 	echo Generating combined top images
 	$GERBV $IMAGE_SIZE --export=png  --output=$OUTPUTDIR/$NAME.board-top.png \
