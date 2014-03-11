@@ -37,7 +37,7 @@ COPPERCOLOR="#7f6b00"
 DPI=500
 
 #Optionally include outlines on the individual layer renderings. Should be true or false.
-INCLUDE_OUTLINES=true
+INCLUDE_OUTLINES=false
 
 ###############################
 ##END OF USER ADJUSTABLE VALUES
@@ -137,7 +137,7 @@ for BOARD in $(git status -s|grep "^[AM].*.brd" |sed 's/^[AM] *//');do
 	WINDOWHEIGHT=$(echo "$BOARDHEIGHT*$DPI" |bc -l )
 	
 	#Now, provide GerbV with all the data it needs to provide the exact image frame that we want
-	IMAGE_SIZE="--origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT}"
+	IMAGE_SIZE="--origin=${fMINX}x${fMINY} --dpi=$DPI --window=${WINDOWWIDTH}x${WINDOWHEIGHT} --antialias"
 
 	}	
 	
